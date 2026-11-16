@@ -1,0 +1,104 @@
+import raw from '@/data/map-data.json';
+import type { RegionId } from '@/lib/calendar/types';
+
+export type MapPoint = {
+  i: number;
+  x: number;
+  y: number;
+  s: 'm' | 'v';
+  f: number;
+  sc: number;
+  tr: number;
+  ang: number;
+  pf: string;
+  dn: string;
+};
+
+export type MapHover = {
+  point: MapPoint;
+  status: 'keep' | 'sza' | 'saa' | 'static' | 'dup';
+  clientX: number;
+  clientY: number;
+};
+
+export type MapStatus = 'keep' | 'sza' | 'saa' | 'static' | 'dup';
+
+/** A clicked dot. */
+export type MapSelect = { point: MapPoint; status: MapStatus };
+
+/** [lon, lat, fire power MW, "MM-DD HH:MM" UTC, sun angle, confidence]; indexed by `MapPoint.i`. */
+export type MapDetail = [number, number, number, string, number, string];
+
+export type MapCounts = {
+  total: number;
+  sza: number;
+  saa: number;
+  static: number;
+  dup: number;
+  sampled: number;
+};
+
+export type MapCountry = {
+  id: string;
+  d: string;
+  focus: boolean;
+};
+
+export type MapRegion = {
+  bbox: number[];
+  /** The box FIRMS was queried with, and its projected outline. */
+  queryBox: number[];
+  queryBoxPath: string;
+  pxPerKm: number;
+  saaPath: string;
+  coveragePath: string;
+  /** Projected bounding box [x0, y0, x1, y1] of the focus countries. */
+  fit: number[];
+  /** Every drawn country merged: the area the shaded relief is clipped to. */
+  landPath: string;
+  rivers: string;
+  lakes: string;
+  staticSources: { id: string; x: number; y: number }[];
+  islands: {
+    id: string;
+    boxPath: string;
+    label: { x: number; y: number } | null;
+    points: { name: string; x: number; y: number }[];
+  }[];
+  countries: MapCountry[];
+  borders: string;
+  graticule: string;
+  counts: Record<string, MapCounts>;
+};
+
+export type MapData = {
+  width: number;
+  height: number;
+  /** How far past the viewBox the base layers and relief are drawn, on each side. */
+  pad: { x: number; y: number };
+  saa: { lon: number; lat: number; rx: number; ry: number };
+  regions: Record<RegionId, MapRegion>;
+};
+
+export const MAP_DATA = raw as unknown as MapData;
+
+export const MAP_FLAGS = {
+  sza: 1,
+  saa: 2,
+  static: 4,
+  dup: 8,
+} as const;
+
+const epochCache = new Map<string, Promise<Record<string, MapPoint[]>>>();
+
+/** The plane map's dots per year, fetched on demand: they are ~10 MB and most visitors never open that map. */
+export function loadEpochs(region: string): Promise<Record<string, MapPoint[]>> {
+  let loaded = epochCache.get(region);
+  if (!loaded) {
+    loaded = fetch(`/map-epochs/${region}.json`)
+      .then((response) => (response.ok ? (response.json() as Promise<Record<string, MapPoint[]>>) : {}))
+      .catch(() => ({}));
+    epochCache.set(region, loaded);
+  }
+  return loaded;
+}
